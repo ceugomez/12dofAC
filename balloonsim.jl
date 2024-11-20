@@ -1,7 +1,8 @@
 include("generic.jl");
+using Parameters
 # State derivative of a balloon in a wind field (to be implemented)
-mutable struct balloonParams
-    g = 9.81
+@with_kw mutable struct balloonParams
+    gravity::Float64 = 9.81
     ρa::Float64 = 1.225 # kg/m^3        !! Modifiable based on state
     ρh::Float64 = 0.166 # kg/m^3, helium
     Cd::Float64 = 0.01  # drag coeff    !!Placeholder
@@ -9,7 +10,7 @@ mutable struct balloonParams
     vol::Float64 = 2;   # m^3,          !!Placeholder
     m::Float64 = 0.1    # kg            !!Placeholder
 end
-mutable struct balloonState
+@with_kw mutable struct balloonState
     pos::Vector{Float64} = [0.0,0.0,0.0]    # inertial position, m
     vel::Vector{Float64} = [0.0,0.0,0.0]    # inertial velocity, m/s
 end
