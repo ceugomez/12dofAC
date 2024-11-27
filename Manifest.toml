@@ -2,7 +2,7 @@
 
 julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "19688133dbe15cebb31044c6f8fdf21e34431562"
+project_hash = "a53c555f5f3c6c4522d7b8d8c508e584ade40f89"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "30bb95a372787af850addf28ac937f1be7b79173"
@@ -100,6 +100,11 @@ version = "7.17.1"
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 version = "1.11.0"
+
+[[deps.Atmosphere]]
+path = "Atmosphere.jl"
+uuid = "5a8d008c-c676-11e8-3e1a-9ff5e58349a0"
+version = "0.1.0"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
