@@ -1,3 +1,0 @@
-[submodule "Atmosphere.jl"]
-	path = Atmosphere.jl
-	url = git@github.com:byuflowlab/Atmosphere.jl.git
