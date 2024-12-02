@@ -8,21 +8,25 @@ using Parameters, Atmosphere
     gravity::Float64 = 9.81
     ρa::Float64 = 1.225 # kg/m^3      
     ρh::Float64 = 0.166 # kg/m^3, helium
-    Cd::Float64 = 0.005  # drag coeff    !!Placeholder
-    r::Float64 = 1;     # m,            !!Placeholder
-    vol::Float64 = 0.125;   # m^3,         
-    m::Float64 = 0.102#0.092    # kg       
+    Cd::Float64 = 0.5  # drag coeff, modified
+    r::Float64 = 0.310175245;     # m,            
+    vol::Float64 = 0.125;   # m^3,          
+    m::Float64 = 0.092    # kg       
 end
 function balloonstatederiv(x::Vector{Float64})
     # Buoyancy force
-    rho_z, _, _ = atmospherefit(x[3])
+    prm.vol = (4/3) * π * prm.r^3
+    rho_z, mu, _ = atmospherefit(x[3])
     prm.ρa = Float64(rho_z)
     fb = (prm.ρa - prm.ρh) * prm.gravity * prm.vol                  
     Fb = [0.0, 0.0, fb]  # Only in z direction
 
     # Drag force
-    Vrel = x[4:6] - DownburstWindField(x[1:3])  # Relative velocity
+    Vrel = x[4:6] - WindField(x[1:3])  # Relative velocity
+    # absolute sp
     rel_speed = norm(Vrel)
+    
+    prm.Cd = getDragCoeff(rel_speed,prm.ρa,mu);
     area = π * prm.r^2  # Balloon cross-sectional area
     Fd_mag = prm.Cd * 0.5 * prm.ρa * rel_speed^2 * area
     if rel_speed > 1e-12  # Small tolerance to avoid division by zero
@@ -40,6 +44,24 @@ function balloonstatederiv(x::Vector{Float64})
     # State derivative: [velocity; acceleration]
     xdot = vcat(x[4:6], a)
     return xdot
+end
+function getDragCoeff(vrel::Float64, rho::Float64, mu::Float64)
+    # calculate reynolds number
+    RE = rho*vrel*2*prm.r/mu;
+    Cd = 0.0;
+    if (RE≤1)
+        Cd = 24/RE
+    end
+    if (RE > 1 && RE ≤ 400)
+        Cd = 24/(RE^0.646)
+    end
+    if (RE>400 && RE < 3*10^5)
+        Cd = 0.5 
+    end
+    if (RE>3*10^5)
+        Cd = 3.66*10^(-4)*(RE^0.4275)
+    end
+    return Cd
 end
 
 function visualize_field_xyz(history::Matrix{Float64})
@@ -101,8 +123,6 @@ function visualize_field_t(history::Matrix{Float64}, dt::Float64, tf::Float64)
     # Adjust layout and save the figure
     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Leave space for the title
     PyPlot.savefig("./figures/TTrack.png", dpi=300)
-    show()
-
     return nothing
 end
 
@@ -111,15 +131,15 @@ begin
     global prm = balloonParams()
 
     # Simulation parameters
-    tstep = 0.05  # Time step in seconds
-    tf = 5500.0  # Total simulation time in seconds
+    tstep = 0.01  # Time step in seconds
+    tf = 300.0 #5500.0  # Total simulation time in seconds
     noIdx = Int64(tf / tstep) + 1  # Number of time steps including initial state
 
     # Initialize history array (6 state variables: x, y, z, vx, vy, vz)
     history = zeros(Float64, 6, noIdx)
 
     # Set initial state 
-    history[:, 1] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [x, y, z, vx, vy, vz]
+    history[:, 1] = [200.0, 200.0, 10.0, 0.0, 0.0, 0.0]  # [x, y, z, vx, vy, vz]
 
     # Simulation loop
     for i in 1:(noIdx - 1)
@@ -135,20 +155,18 @@ begin
 
     println("Simulation complete.")
 
-    # Visualize the results
-    #plot_wind_field_2d((-500, 500), (0, 500))
-
-    # Plot 3D wind field
-    #plot_wind_field_3d(((-500, 500), (-500, 500), (0, 500)))
     # Define the domain and resolution
-    domain_x = (-500, 500)  # x domain in meters
-    domain_z = (0, 500)     # z domain in meters
-    resolution = 50         # Number of grid points
+    domain_x = (-1000, 1000)  # x domain in meters
+    domain_y = (-1000, 1000)  # y domain in meters
+    domain_z = (0,1500)     # z domain in meters
+    resolution = 60         # Number of grid points
+    height_z = 150.0;
 
     # Plot the wind direction
-    plot_wind_direction_heatmap(domain_x, domain_z, resolution)
-
-    #visualize_field_t(history[1:3, :],tstep,tf)  
-    #visualize_field_xyz(history[1:3, :])
+    plot_wind_direction_VF(domain_x, domain_z, resolution, 0.2)
+    #plot_wind_top_down(domain_x, domain_y, height_z, resolution, 0.4)
+    plot_wind_top_down_with_path(domain_x, domain_y, history, height_z, resolution, 0.2)
+    visualize_field_t(history[1:3, :],tstep,tf)  
+    visualize_field_xyz(history[1:3, :])
     println("Plotted")
 end

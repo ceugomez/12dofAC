@@ -1,163 +1,214 @@
-using LinearAlgebra, BenchmarkTools, PyPlot, Optimization, Plots
+using LinearAlgebra, FFMPEG, BenchmarkTools, PyPlot, Optimization, Plots
 using Base.MathConstants: π
 
 # Constants and parameters for the shaping functions
-const D = 1000.0  # Characteristic downburst diameter
+const D = 750.0       # Characteristic downburst diameter
 const zm = 0.025 * D  # Height of maximum horizontal velocity
 const rm = 1.125 * D  # Radial distance of maximum horizontal velocity
-const l = 10.5  # Scaling factor (to be calibrated)
+const λ = 0.2  # Scaling factor (to be calibrated)
 
 # Shaping function parameters
-const c1 = -0.16
-const c2 = 1 / (1 + abs(c1))
-const d = 2.1
-const g = 0.5
-const e = 0.3
-const k = 0.1
-const w = 1.0
+const ζ1 = 0.133
+const ζ2 = 1.1534
+const α = 1.8
+const β = 300; 
 
-# Shaping functions
-function radial_shaping_function(r)
-    if rm == 0
-        error("Characteristic radius (rm) cannot be zero.")
-    end
-    r_normalized = r / rm
-    return l * (r_normalized^d) * exp(-g * r_normalized^2) +
-           e * exp(-k * r_normalized^2)
-end
-function vertical_shaping_function(z)
-    if zm == 0
-        error("Characteristic height (zm) cannot be zero.")
-    end
-    z_normalized = max(z / zm, 1e-6)  # Avoid zero or negative values
-    return (z_normalized^(c2 - 1)) * exp(c1 * z_normalized^c2)
-end
+function WindField(pos::Vector{Float64})
+    E, N, z = pos[1:3]
+    r = sqrt.(E .^ 2 + N .^ 2)  # radial distance from core
+    # eq. A.11
+    u = (λ*r / 2) *
+        (
+            exp(ζ1 * (z / zm)) - exp(ζ2 * (z / zm))
+        ) *
+        (
+            exp(
+            (
+                1 - ((r^2) / (β^2))^α
+            ) / α
+        )
+        )
+    #eq. A.12
+    w = (
+            (zm / ζ1) * (exp(ζ1 * (z / zm)) - 1)
+            -
+            (zm / ζ2) * (exp(ζ2 * (z / zm) - 1))
+        ) *
+        (
+            1 - (r^2 / β^2)^α
+        ) *
+        exp(
+            (1 - (r^2 / β^2)^α)
+            /
+            α
+        )
 
-function vertical_velocity_function(r, z)
-    if rm == 0 || zm == 0
-        error("Characteristic dimensions (rm, zm) cannot be zero.")
-    end
-    r_normalized = r / rm
-    z_normalized = max(z / zm, 1e-6)  # Avoid zero or negative values
-    term1 = -l * g * exp(-g * r_normalized^2)
-    term2 = c1 * c2 * exp(c1 * z_normalized^c2)
-    return term1 * term2
-end
-
-function DownburstWindField(position::Vector{Float64})
-    if length(position) != 3
-        error("Position vector must have exactly 3 elements: [x, y, z].")
-    end
-
-    r = sqrt(position[1]^2 + position[2]^2)  # Radial distance
-    z = position[3]  # Height
-
-    u = radial_shaping_function(r) * vertical_shaping_function(z)
-    v = 0.0  # Assume no tangential component for symmetry
-    w = vertical_velocity_function(r, z)
-
-    if isnan(u) || isnan(w)
-        println("Warning: NaN detected in wind field components.")
-        return [0.0, 0.0, 0.0]
+    # cylindrical to ac
+    if (E != 0 || N != 0)
+        θ = atan(N,E)
+    else
+        θ = 45*π/180
     end
 
-    return [u; v; w]
+    return [u*cos(θ), u*sin(θ), w]
 end
 
-
-function WindField(pos)
-    x,y,z = pos[1:3];
-    W_N = 500*(z*z)  # North wind component
-    W_E = 5    # East wind component
-    W_U = 0   # Updraft component (f(x, y, z) if position-dependent)
-    return [W_N; W_E; W_U]
+# generic wind field 
+function GenericWindField(pos)
+    E, N, U = pos[1:3]
+    W_N = U / 10
+    W_E = U / 10
+    W_U = 0
+    return [W_E; W_N; W_U]
 end
-using PyPlot
-
-function plot_wind_direction_heatmap(domain_x, domain_z, resolution=50)
-    # Define the grid over the domain
+# EU quiver wind plot
+function plot_wind_direction_VF(domain_x, domain_z, resolution=50, arrow_scale=0.2)
+    # Generate x and z vectors
     x_vals = LinRange(domain_x[1], domain_x[2], resolution)
     z_vals = LinRange(domain_z[1], domain_z[2], resolution)
-
-    # Create mesh grid
-    x_coords = repeat(x_vals, 1, resolution)
+    
+    # Create meshgrid for x and z
+    x_coords = repeat(x_vals, 1, resolution)'
     z_coords = repeat(z_vals', resolution, 1)
 
-    # Compute wind field
+    # Initialize wind field components
     u = zeros(resolution, resolution)
     w = zeros(resolution, resolution)
+
+    # Compute wind field values at each grid point
     for i in 1:resolution
         for j in 1:resolution
-            u[i, j], _, w[i, j] = DownburstWindField([x_coords[i, j], 0.0, z_coords[i, j]])
+            u[i, j], _, w[i, j] = WindField([x_coords[i, j], 0.0, z_coords[i, j]])
         end
     end
 
-    # Plot using PyPlot
-    figure(figsize=(12, 4))
-    suptitle("Wind Field Heatmaps", fontsize=14)
+    # Calculate magnitude of the wind field
+    mag = sqrt.(u .^ 2 + w .^ 2)
 
-    # First subplot for `u`
-    subplot(1, 2, 1)
-    imshow(u, extent=(domain_x[1], domain_x[2], domain_z[1], domain_z[2]), origin="lower", aspect="auto", cmap="viridis")
-    colorbar()
-    title("U Component")
-    xlabel("x")
-    ylabel("z")
+    # Normalize vectors for quiver plot and scale them
+    u_scaled = arrow_scale .* (u ./ (mag .+ eps()))  # Avoid division by zero
+    w_scaled = arrow_scale .* (w ./ (mag .+ eps()))
 
-    # Second subplot for `w`
-    subplot(1, 2, 2)
-    imshow(w, extent=(domain_x[1], domain_x[2], domain_z[1], domain_z[2]), origin="lower", aspect="auto", cmap="viridis")
-    colorbar()
-    title("W Component")
-    xlabel("x")
-    ylabel("z")
+    # Set up plot
+    gr(legend=false, dpi=600)
 
-    # Save and show the plot
+    # Heatmap for magnitude
+    heatmap(
+        x_vals, z_vals, mag',
+        color=:viridis,
+        title="Wind Field (Vertical Slice at N=0)",
+        xlabel="East [m]",
+        ylabel="Up [m]"
+    )
+
+    # Overlay quiver plot with scaled vectors
+    quiver!(
+        x_coords, z_coords, quiver=(u_scaled, w_scaled), color=:black
+    )
+
+    # Save and display the plot
+    Plots.savefig("./figures/WindVF.png")
     show()
-    PyPlot.savefig("./figures/WindHeatmap.png", dpi=300)
+    return nothing
 end
+function plot_wind_top_down(domain_x, domain_y, height=50.0, resolution=50, arrow_scale=0.2)
+    # Generate x and y vectors
+    x_vals = LinRange(domain_x[1], domain_x[2], resolution)
+    y_vals = LinRange(domain_y[1], domain_y[2], resolution)
+    # Meshgrid
+    x_coords = repeat(x_vals, 1, resolution)
+    y_coords = repeat(y_vals', resolution, 1)
 
-
-function plot_wind_field_3d(domain, resolution=10)
-    x_vals = range(domain[1][1], domain[1][2], length=resolution)
-    y_vals = range(domain[2][1], domain[2][2], length=resolution)
-    z_vals = range(domain[3][1], domain[3][2], length=resolution)
-
-    X, Y, Z = [], [], []
-    U, V, W = [], [], []
-
-    for x in x_vals
-        for y in y_vals
-            for z in z_vals
-                u, v, w = DownburstWindField([x, y, z])
-                push!(X, x)
-                push!(Y, y)
-                push!(Z, z)
-                push!(U, u)
-                push!(V, v)
-                push!(W, w)
-            end
+    # Compute wind field at specified height
+    u = zeros(resolution, resolution)
+    v = zeros(resolution, resolution)
+    for i in 1:resolution
+        for j in 1:resolution
+            u[i, j], v[i, j], _ = WindField([x_coords[i, j], y_coords[i, j], height])
         end
     end
 
-    # Plot the 3D vector field
-    Plots.quiver(
-        X/1000, Y/1000, Z,
-        quiver=(U, V, W),
-        xlabel="x (km)", ylabel="y (km)", zlabel="z (m)", title="3D Wind Field",
-        marker=:circle, linealpha=0.7
+    # Calculate wind magnitude
+    mag = sqrt.(u .^ 2 + v .^ 2)
+
+    # Normalize the vectors and scale them for the quiver plot
+    u_scaled = arrow_scale .* (u ./ (mag .+ eps()))  
+    v_scaled = arrow_scale .* (v ./ (mag .+ eps()))
+
+    # Set up plot
+    gr(legend=false, dpi=600)
+
+    # Heatmap for wind magnitude
+    heatmap(
+        x_vals, y_vals, mag,
+        color=:viridis,
+        title="Wind Field at Height = $height m",
+        xlabel="East [m]",
+        ylabel="North [m]"
     )
-    Plots.savefig("./figures/WindField2.png")
-    Plots.quiver(
-        X/1000,Z,
-        quiver=(U,W);
-        xlabel="x (km)", ylabel= "z (m)", title="2D Wind Field",
-        marker=:circle, linealpha=0.7
-    )
+
+    # Overlay quiver plot with scaled vectors
+    quiver!(x_coords, y_coords, quiver=(u_scaled, v_scaled), color=:black)
+
+    # Save and display plot
+    Plots.savefig("./figures/WindTopDown.png")
     show()
-    Plots.savefig("./figures/WindField3.png")
-    return nothing;
+    return nothing
 end
+
+function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float64}, height=50.0, resolution=50, arrow_scale=0.2)
+    # Generate x and y vectors
+    x_vals = LinRange(domain_x[1], domain_x[2], resolution)
+    y_vals = LinRange(domain_y[1], domain_y[2], resolution)
+    # Meshgrid
+    x_coords = repeat(x_vals, 1, resolution)
+    y_coords = repeat(y_vals', resolution, 1)
+
+    # Compute wind field at specified height
+    u = zeros(resolution, resolution)
+    v = zeros(resolution, resolution)
+    for i in 1:resolution
+        for j in 1:resolution
+            u[i, j], v[i, j], _ = WindField([x_coords[i, j], y_coords[i, j], height])
+        end
+    end
+
+    # Calculate wind magnitude
+    mag = sqrt.(u .^ 2 + v .^ 2)
+
+    # Normalize the vectors and scale them for the quiver plot
+    u_scaled = arrow_scale .* (u ./ (mag .+ eps()))  # Avoid division by zero
+    v_scaled = arrow_scale .* (v ./ (mag .+ eps()))
+
+    # Extract balloon path from history
+    balloon_x = history[1, :]  # Easting
+    balloon_y = history[2, :]  # Northing
+
+    # Set up plot
+    gr(legend=false, dpi=600)
+
+    # Heatmap for wind magnitude
+    heatmap(
+        x_vals, y_vals, mag,
+        color=:viridis,
+        title="Wind Field with Balloon Path at Height = $height m",
+        xlabel="East [m]",
+        ylabel="North [m]"
+    )
+
+    # Overlay quiver plot with scaled vectors
+    quiver!(x_coords, y_coords, quiver=(u_scaled, v_scaled), color=:black)
+
+    # Overlay balloon path
+    plot!(balloon_x, balloon_y, color=:red, lw=2, label="Balloon Path")
+
+    # Save and display plot
+    Plots.savefig("./figures/WindTopDownWithPath.png")
+    show()
+    return nothing
+end
+
+
 
 # Runge-Kutta 4th-order integrator
 function RK4_int(dt, state, fdot::Function)
