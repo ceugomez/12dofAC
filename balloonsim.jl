@@ -21,7 +21,7 @@ function balloonstatederiv(x::Vector{Float64})
     Fb = [0.0, 0.0, fb]  # Only in z direction
 
     # Drag force
-    Vrel = x[4:6] - WindField(x[1:3])  # Relative velocity
+    Vrel = x[4:6] - DownburstWindField(x[1:3])  # Relative velocity
     rel_speed = norm(Vrel)
     area = π * prm.r^2  # Balloon cross-sectional area
     Fd_mag = prm.Cd * 0.5 * prm.ρa * rel_speed^2 * area
@@ -42,29 +42,27 @@ function balloonstatederiv(x::Vector{Float64})
     return xdot
 end
 
+function visualize_field_xyz(history::Matrix{Float64})
+    # Validate input dimensions
+    if size(history, 1) < 3
+        error("Input matrix must have at least 3 rows representing E, N, and Up.")
+    end
 
-function VisualizeFieldXYZ(history::Matrix{Float64})
-    plt = figure();
-    title("Balloon Ground Track");
-    # NE track
-        ax1 = plt.add_subplot(131);
-        ax1.plot(history[1,:], history[2,:]);
-        xlabel("Easting [m]")
-        ylabel("Northing [m]")
-        # EU track
-        ax2 = plt.add_subplot(132);
-        ax2.plot(history[2,:], history[3,:]);
-        xlabel("Easting [m]")
-        ylabel("Up [m]")
-        # 3d plot
-        ax3 = plt.add_subplot(133);
-        ax3.plot(history[1,:],history[3,:]);
-        xlabel("Northing[m]");
-        ylabel("Up [m]")
-    savefig("./figures/Track")
+    # Create subplots for the tracks
+    plot1 = Plots.plot(history[1, :]/1000, history[2, :]/1000, xlabel="Easting [m]", ylabel="Northing [m]", title="NE Track")
+    plot2 = Plots.plot(history[1, :]/1000, history[3, :], xlabel="Easting [m]", ylabel="Up [m]", title="EU Track")
+    plot3 = Plots.plot(history[2, :]/1000, history[3, :], xlabel="Northing [m]", ylabel="Up [m]", title="3D Track")
+
+    # Combine the plots into a grid layout
+    layout = @layout [a b; c]
+    Plots.plot(plot1, plot2, plot3, layout=layout, size=(900, 600))
+
+    # Save the figure
+    Plots.savefig("./figures/Track.png")
     show()
     return nothing
 end
+
 function visualize_field_t(history::Matrix{Float64}, dt::Float64, tf::Float64)
     # Validate input dimensions
     @assert size(history, 1) == 3 "Input 'history' must have 3 rows (Easting, Northing, Up)."
@@ -78,7 +76,7 @@ function visualize_field_t(history::Matrix{Float64}, dt::Float64, tf::Float64)
 
     # Plot Easting vs. Time
     ax1 = plt.add_subplot(131)
-    ax1.plot(t, history[2, :]/1000, label="Easting", color="blue")
+    ax1.plot(t, history[1, :]/1000, label="Easting", color="blue")
     ax1.set_xlabel("Time [min]")
     ax1.set_ylabel("Easting [km]")
     ax1.grid(true)
@@ -86,7 +84,7 @@ function visualize_field_t(history::Matrix{Float64}, dt::Float64, tf::Float64)
 
     # Plot Northing vs. Time
     ax2 = plt.add_subplot(132)
-    ax2.plot(t, history[1, :]/1000, label="Northing", color="green")
+    ax2.plot(t, history[2, :]/1000, label="Northing", color="green")
     ax2.set_xlabel("Time [min]")
     ax2.set_ylabel("Northing [km]")
     ax2.grid(true)
@@ -102,21 +100,19 @@ function visualize_field_t(history::Matrix{Float64}, dt::Float64, tf::Float64)
 
     # Adjust layout and save the figure
     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Leave space for the title
-    savefig("./figures/TTrack.png", dpi=300)
+    PyPlot.savefig("./figures/TTrack.png", dpi=300)
     show()
 
     return nothing
 end
 
 begin
-    println("Simulating...")
-
     # Initialize parameter structure
     global prm = balloonParams()
 
     # Simulation parameters
     tstep = 0.05  # Time step in seconds
-    tf = 1500.0  # Total simulation time in seconds
+    tf = 5500.0  # Total simulation time in seconds
     noIdx = Int64(tf / tstep) + 1  # Number of time steps including initial state
 
     # Initialize history array (6 state variables: x, y, z, vx, vy, vz)
@@ -138,15 +134,21 @@ begin
     end
 
     println("Simulation complete.")
-    for i in 1:100
-        println(history[1,i])
-    end
 
     # Visualize the results
-    plot_wind_field_2d((-500, 500), (0, 500))
+    #plot_wind_field_2d((-500, 500), (0, 500))
 
     # Plot 3D wind field
-    plot_wind_field_3d(((-500, 500), (-500, 500), (0, 500)))
+    #plot_wind_field_3d(((-500, 500), (-500, 500), (0, 500)))
+    # Define the domain and resolution
+    domain_x = (-500, 500)  # x domain in meters
+    domain_z = (0, 500)     # z domain in meters
+    resolution = 20         # Number of grid points
+
+    # Plot the wind direction
+    plot_wind_direction_slice(domain_x, domain_z, resolution)
 
     visualize_field_t(history[1:3, :],tstep,tf)  
+    visualize_field_xyz(history[1:3, :])
+    println("Plotted")
 end
