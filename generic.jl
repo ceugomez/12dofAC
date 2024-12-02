@@ -67,70 +67,57 @@ end
 
 function WindField(pos)
     x,y,z = pos[1:3];
-    W_N = 5*(z*z)  # North wind component
-    W_E = 0    # East wind component
+    W_N = 500*(z*z)  # North wind component
+    W_E = 5    # East wind component
     W_U = 0   # Updraft component (f(x, y, z) if position-dependent)
     return [W_N; W_E; W_U]
 end
+using PyPlot
 
-
-# Visualization of the wind field
-function plot_wind_field_2d(domain_x, domain_z, resolution=20)
-    x_vals = range(domain_x[1], domain_x[2], length=resolution)
-    z_vals = range(domain_z[1], domain_z[2], length=resolution)
-    u_vals = zeros(resolution, resolution)
-    w_vals = zeros(resolution, resolution)
-
-    for (i, x) in enumerate(x_vals)
-        for (j, z) in enumerate(z_vals)
-            u, _, w = DownburstWindField([x, 0.0, z])  # 2D assumes y=0
-            u_vals[i, j] = u
-            w_vals[i, j] = w
-        end
-    end
-
-    # Plot the vector field
-    Plots.quiver(
-        x_vals./1000, z_vals,
-        quiver=(u_vals', w_vals'),
-        xlabel="x (km)", ylabel="z (m)", title="2D Wind Field",
-        aspect_ratio=:equal, legend=false
-    )
-    show()
-    Plots.savefig("./figures/WindField1.png")
-end
-
-function plot_wind_direction_slice(domain_x, domain_z, resolution=20)
+function plot_wind_direction_heatmap(domain_x, domain_z, resolution=50)
     # Define the grid over the domain
-    x_vals = range(domain_x[1], domain_x[2], length=resolution)
-    z_vals = range(domain_z[1], domain_z[2], length=resolution)
-    u_vals = zeros(resolution, resolution)
-    w_vals = zeros(resolution, resolution)
+    x_vals = LinRange(domain_x[1], domain_x[2], resolution)
+    z_vals = LinRange(domain_z[1], domain_z[2], resolution)
 
-    for (i, x) in enumerate(x_vals)
-        for (j, z) in enumerate(z_vals)
-            u, _, w = DownburstWindField([x, 0.0, z])  # 2D assumes y=0
-            magnitude = sqrt(u^2 + w^2)  # Compute magnitude of the vector
-            if magnitude > 0
-                u_vals[i, j] = u / magnitude  # Normalize u
-                w_vals[i, j] = w / magnitude  # Normalize w
-            else
-                u_vals[i, j] = 0.0  # Avoid NaNs for zero-magnitude vectors
-                w_vals[i, j] = 0.0
-            end
+    # Create mesh grid
+    x_coords = repeat(x_vals, 1, resolution)
+    z_coords = repeat(z_vals', resolution, 1)
+
+    # Compute wind field
+    u = zeros(resolution, resolution)
+    w = zeros(resolution, resolution)
+    for i in 1:resolution
+        for j in 1:resolution
+            u[i, j], _, w[i, j] = DownburstWindField([x_coords[i, j], 0.0, z_coords[i, j]])
         end
     end
 
-    # Plot the normalized vector field
-    Plots.quiver(
-        x_vals ./ 1000, z_vals,
-        quiver=(u_vals', w_vals'),
-        xlabel="x (km)", ylabel="z (m)", title="2D Wind Direction Field",
-        aspect_ratio=:equal, legend=false
-    )
+    # Plot using PyPlot
+    figure(figsize=(12, 4))
+    suptitle("Wind Field Heatmaps", fontsize=14)
+
+    # First subplot for `u`
+    subplot(1, 2, 1)
+    imshow(u, extent=(domain_x[1], domain_x[2], domain_z[1], domain_z[2]), origin="lower", aspect="auto", cmap="viridis")
+    colorbar()
+    title("U Component")
+    xlabel("x")
+    ylabel("z")
+
+    # Second subplot for `w`
+    subplot(1, 2, 2)
+    imshow(w, extent=(domain_x[1], domain_x[2], domain_z[1], domain_z[2]), origin="lower", aspect="auto", cmap="viridis")
+    colorbar()
+    title("W Component")
+    xlabel("x")
+    ylabel("z")
+
+    # Save and show the plot
     show()
-    Plots.savefig("./figures/WindDirectionField.png")
+    PyPlot.savefig("./figures/WindHeatmap.png", dpi=300)
 end
+
+
 function plot_wind_field_3d(domain, resolution=10)
     x_vals = range(domain[1][1], domain[1][2], length=resolution)
     y_vals = range(domain[2][1], domain[2][2], length=resolution)
@@ -160,7 +147,6 @@ function plot_wind_field_3d(domain, resolution=10)
         xlabel="x (km)", ylabel="y (km)", zlabel="z (m)", title="3D Wind Field",
         marker=:circle, linealpha=0.7
     )
-    show()
     Plots.savefig("./figures/WindField2.png")
     Plots.quiver(
         X/1000,Z,
@@ -168,6 +154,7 @@ function plot_wind_field_3d(domain, resolution=10)
         xlabel="x (km)", ylabel= "z (m)", title="2D Wind Field",
         marker=:circle, linealpha=0.7
     )
+    show()
     Plots.savefig("./figures/WindField3.png")
     return nothing;
 end

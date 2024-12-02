@@ -143,12 +143,12 @@ begin
     # Define the domain and resolution
     domain_x = (-500, 500)  # x domain in meters
     domain_z = (0, 500)     # z domain in meters
-    resolution = 20         # Number of grid points
+    resolution = 50         # Number of grid points
 
     # Plot the wind direction
-    plot_wind_direction_slice(domain_x, domain_z, resolution)
+    plot_wind_direction_heatmap(domain_x, domain_z, resolution)
 
-    visualize_field_t(history[1:3, :],tstep,tf)  
-    visualize_field_xyz(history[1:3, :])
+    #visualize_field_t(history[1:3, :],tstep,tf)  
+    #visualize_field_xyz(history[1:3, :])
     println("Plotted")
 end
