@@ -157,10 +157,10 @@ function plot_wind_top_down(domain_x, domain_y, height=50.0, resolution=50, arro
 end
 
 function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float64}, height=50.0, resolution=50, arrow_scale=0.2)
-    # Generate x and y vectors
+    # Generate x and y vectors for the vector field
     x_vals = LinRange(domain_x[1], domain_x[2], resolution)
     y_vals = LinRange(domain_y[1], domain_y[2], resolution)
-    # Meshgrid
+    # Meshgrid for vector field
     x_coords = repeat(x_vals, 1, resolution)
     y_coords = repeat(y_vals', resolution, 1)
 
@@ -180,27 +180,44 @@ function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float6
     u_scaled = arrow_scale .* (u ./ (mag .+ eps()))  # Avoid division by zero
     v_scaled = arrow_scale .* (v ./ (mag .+ eps()))
 
+    # Generate high-resolution grid for heatmap
+    heatmap_resolution = resolution * 10
+    heatmap_x_vals = LinRange(domain_x[1], domain_x[2], heatmap_resolution)
+    heatmap_y_vals = LinRange(domain_y[1], domain_y[2], heatmap_resolution)
+    heatmap_mag = zeros(heatmap_resolution, heatmap_resolution)
+
+    for i in 1:heatmap_resolution
+        for j in 1:heatmap_resolution
+            heatmap_mag[i, j], _, _ = WindField([heatmap_x_vals[i], heatmap_y_vals[j], height])
+        end
+    end
+
+    # Normalize heatmap magnitude
+    heatmap_mag .= heatmap_mag ./ maximum(heatmap_mag)
+
     # Extract balloon path from history
     balloon_x = history[1, :]  # Easting
     balloon_y = history[2, :]  # Northing
+    balloon_time = LinRange(0, 1, size(history, 2))  # Time normalized to [0, 1]
 
     # Set up plot
     gr(legend=false, dpi=600)
 
     # Heatmap for wind magnitude
     heatmap(
-        x_vals, y_vals, mag,
+        heatmap_x_vals, heatmap_y_vals, heatmap_mag,
         color=:viridis,
         title="Wind Field with Balloon Path at Height = $height m",
         xlabel="East [m]",
-        ylabel="North [m]"
+        ylabel="North [m]",
+        colorbar=true
     )
 
     # Overlay quiver plot with scaled vectors
     quiver!(x_coords, y_coords, quiver=(u_scaled, v_scaled), color=:black)
 
-    # Overlay balloon path
-    plot!(balloon_x, balloon_y, color=:red, lw=2, label="Balloon Path")
+    # Overlay balloon path color-coded by time
+    scatter!(balloon_x, balloon_y, color=balloon_time, marker_z=balloon_time, ms=4, label="", c=:plasma)
 
     # Save and display plot
     Plots.savefig("./figures/WindTopDownWithPath.png")

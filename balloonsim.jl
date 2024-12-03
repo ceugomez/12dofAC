@@ -5,18 +5,19 @@ using Parameters, Atmosphere
     # known from swenson et al; 
     # payload mass: 91g 
     # 125 L volume, ~ 0.125 m^3
-    gravity::Float64 = 9.81
-    ρa::Float64 = 1.225 # kg/m^3      
-    ρh::Float64 = 0.166 # kg/m^3, helium
-    Cd::Float64 = 0.5  # drag coeff, modified
-    r::Float64 = 0.310175245;     # m,            
-    vol::Float64 = 0.125;   # m^3,          
-    m::Float64 = 0.092    # kg       
+    gravity::Float64 = 9.81; 
+    ρa::Float64 = 1.225;            # kg⋅m³         (dynamically modified)
+    ρh::Float64 = 0.166;            # kg⋅m³         (helium)
+    Cd::Float64 = 0.5;              # drag coeff, dynamically modified
+    r::Float64 = 0.310175245;       # m            
+    vol::Float64 = 0.125;           # m³,          (swenson et.al.)
+    m::Float64 = 0.092;             # kg           (swenson et.al)
+    AGL::Float64 = 1611.7824;       # m, AGL->MSL conversion  (KBDU)
 end
 function balloonstatederiv(x::Vector{Float64})
     # Buoyancy force
     prm.vol = (4/3) * π * prm.r^3
-    rho_z, mu, _ = atmospherefit(x[3])
+    rho_z, mu, _ = atmospherefit(x[3]+prm.Agl)
     prm.ρa = Float64(rho_z)
     fb = (prm.ρa - prm.ρh) * prm.gravity * prm.vol                  
     Fb = [0.0, 0.0, fb]  # Only in z direction
@@ -49,6 +50,7 @@ function getDragCoeff(vrel::Float64, rho::Float64, mu::Float64)
     # calculate reynolds number
     RE = rho*vrel*2*prm.r/mu;
     Cd = 0.0;
+    # calculate drag coefficient based on spherical drag model
     if (RE≤1)
         Cd = 24/RE
     end
@@ -65,17 +67,17 @@ function getDragCoeff(vrel::Float64, rho::Float64, mu::Float64)
 end
 
 function visualize_field_xyz(history::Matrix{Float64})
-    # Validate input dimensions
+    # validate input dimensions
     if size(history, 1) < 3
         error("Input matrix must have at least 3 rows representing E, N, and Up.")
     end
 
-    # Create subplots for the tracks
+    # create subplots for the tracks
     plot1 = Plots.plot(history[1, :]/1000, history[2, :]/1000, xlabel="Easting [m]", ylabel="Northing [m]", title="NE Track")
     plot2 = Plots.plot(history[1, :]/1000, history[3, :], xlabel="Easting [m]", ylabel="Up [m]", title="EU Track")
-    plot3 = Plots.plot(history[2, :]/1000, history[3, :], xlabel="Northing [m]", ylabel="Up [m]", title="3D Track")
+    plot3 = Plots.plot(history[2, :]/1000, history[3, :], xlabel="Northing [m]", ylabel="Up [m]", title="NU Track")
 
-    # Combine the plots into a grid layout
+    # combine the plots into a grid layout
     layout = @layout [a b; c]
     Plots.plot(plot1, plot2, plot3, layout=layout, size=(900, 600))
 
@@ -159,8 +161,8 @@ begin
     domain_x = (-1000, 1000)  # x domain in meters
     domain_y = (-1000, 1000)  # y domain in meters
     domain_z = (0,1500)     # z domain in meters
-    resolution = 60         # Number of grid points
-    height_z = 150.0;
+    resolution = 20         # Number of grid points
+    height_z = 100.0;
 
     # Plot the wind direction
     plot_wind_direction_VF(domain_x, domain_z, resolution, 0.2)
