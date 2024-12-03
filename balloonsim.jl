@@ -67,17 +67,17 @@ function getDragCoeff(vrel::Float64, rho::Float64, mu::Float64)
 end
 
 function visualize_field_xyz(history::Matrix{Float64})
-    # validate input dimensions
+    # Validate input dimensions
     if size(history, 1) < 3
         error("Input matrix must have at least 3 rows representing E, N, and Up.")
     end
 
-    # create subplots for the tracks
+    # Create subplots for the tracks
     plot1 = Plots.plot(history[1, :]/1000, history[2, :]/1000, xlabel="Easting [m]", ylabel="Northing [m]", title="NE Track")
     plot2 = Plots.plot(history[1, :]/1000, history[3, :], xlabel="Easting [m]", ylabel="Up [m]", title="EU Track")
-    plot3 = Plots.plot(history[2, :]/1000, history[3, :], xlabel="Northing [m]", ylabel="Up [m]", title="NU Track")
+    plot3 = Plots.plot(history[2, :]/1000, history[3, :], xlabel="Northing [m]", ylabel="Up [m]", title="3D Track")
 
-    # combine the plots into a grid layout
+    # Combine the plots into a grid layout
     layout = @layout [a b; c]
     Plots.plot(plot1, plot2, plot3, layout=layout, size=(900, 600))
 
