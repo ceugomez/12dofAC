@@ -1,29 +1,25 @@
 using PyPlot
-# Example 3D trajectory
-t = LinRange(0, 10, 100)
-x = sin.(t)
-y = cos.(t)
-z = t
+using PyCall
 
-# 2D slices
+# Convert Julia types to numpy-compatible types
+np = pyimport("numpy")  # Import numpy
+X = np.linspace(1, 1, 100)
+Y = np.linspace(1, 1, 100)
+Z = np.ones((100, 100))
+println(size(Z))
 
+# Create 3D plot
+fig = plt.figure()
+ax = fig.add_subplot(projection="3d")
 
-# 3D trajectory
-fig = figure(figsize=(10, 7))
-ax = fig.add_subplot(111,projection="3d")
-ax.plot(x, y, z, label="3D Trajectory", color="green")
-xz_plane = ax.plot(x, z, label="xz-plane", color="blue")
-xy_plane = ax.plot(x, y, label="xy-plane", color="red")
-# Adding the 2D slices
-ax.plot(x, zeros(length(x)), z, color="blue", linestyle="--", label="xz-slice")
-ax.plot(x, y, zeros(length(x)), color="red", linestyle="--", label="xy-slice")
+# Plot the 3D surface
+# Plot projections of the contours for each dimension
+ax.contourf(X, Y, Z, zdir="z", offset=-100, cmap="coolwarm")
+ax.contourf(X, Y, Z, zdir="x", offset=-40, cmap="coolwarm")
+ax.contourf(X, Y, Z, zdir="y", offset=40, cmap="coolwarm")
 
-# Labels and Title
-ax.set_xlabel("X-axis")
-ax.set_ylabel("Y-axis")
-ax.set_zlabel("Z-axis")
-ax.set_title("3D Trajectory with xz and xy slices")
+# Set axis limits and labels
+ax.set(xlim=(-40, 40), ylim=(-40, 40), zlim=(-100, 100),
+       xlabel="X", ylabel="Y", zlabel="Z")
 
-# Show the plot
-legend()
-show()
+plt.show()

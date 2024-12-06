@@ -1,4 +1,4 @@
-using LinearAlgebra, FFMPEG, BenchmarkTools, PyPlot, Optimization, Plots
+using LinearAlgebra, FFMPEG, BenchmarkTools, PyPlot, Optimization, Plots, PyCall
 using Base.MathConstants: π
 # Constants and parameters for the shaping functions
 const D = 2500.0       # Characteristic downburst diameter [m]
@@ -221,8 +221,8 @@ function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float6
     )
     ax.set_title("Wind Field (Vertical Slice at $height m)")
     ax.set_xlabel("East [m]")
-    ax.set_ylabel("Up [m]")
-    ax.plot(balloon_x,balloon_y)
+    ax.set_ylabel("North [m]")
+    ax.plot(balloon_x,balloon_y, w=3, color="red")
     ax.legend("Balloon Path")
 
     # Save the plot
@@ -230,53 +230,48 @@ function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float6
     show()
     return nothing
 end
-function plotFancy(domain_x, domain_y, domain_z, history, height=50, resolution=50, arrow_scale=0.2)
+
+function PleasePleasePlease(domain_x, domain_y, domain_z, history, height=50, resolution=50, arrow_scale=0.2)
+    np = pyimport("numpy")
     downscale = 10;
+    arrow_scale = 100
     # Generate vectors for x, y, and z
-    x_vals = LinRange(domain_x[1], domain_x[2], resolution)
-    y_vals = LinRange(domain_y[1], domain_y[2], resolution)
-    z_vals = LinRange(domain_z[1], domain_z[2], resolution)
-
-    # Compute fields for yz, xz, and xy planes
-    # yz plane @ x=-1000
-    vyz = zeros(resolution, resolution)
-    wyz = zeros(resolution, resolution)
-    for i in 1:resolution
-        for j in 1:resolution
-            _, vyz[i, j], wyz[i, j] = WindField([0.0, y_vals[i], z_vals[j]])
-        end
-    end
-    yzmag = sqrt.(vyz.^2 .+ wyz.^2)
-
-    # xz plane @ y=-1000
-    uxz = zeros(resolution, resolution)
-    wxz = zeros(resolution, resolution)
-    for i in 1:resolution
-        for j in 1:resolution
-            uxz[i, j], _, wxz[i, j] = WindField([x_vals[i], 0.0, z_vals[j]])
-        end
-    end
-    xzmag = sqrt.(uxz.^2 .+ wxz.^2)
+        x_vals = LinRange(domain_x[1], domain_x[2], resolution)
+        y_vals = LinRange(domain_y[1], domain_y[2], resolution)
+        z_vals = LinRange(domain_z[1], domain_z[2], resolution)
 
     # xy plane @ z=height
-    uxy = zeros(resolution, resolution)
-    vxy = zeros(resolution, resolution)
-    for i in 1:resolution
-        for j in 1:resolution
-            uxy[i, j], vxy[i, j], _ = WindField([x_vals[i], y_vals[j], height])
+        uxy = zeros(resolution, resolution)
+        vxy = zeros(resolution, resolution)
+        for i in 1:resolution
+            for j in 1:resolution
+                uxy[i, j], vxy[i, j], _ = WindField([x_vals[i], y_vals[j], height])
+            end
         end
-    end
-    xymag = sqrt.(uxy.^2 .+ vxy.^2)
-    # Extract balloon path from history
-    balloon_x = history[1, :]  # Easting
-    balloon_y = history[2, :]  # Northing
-    balloon_z = history[3, :]  # Altitude
+        xymag = sqrt.(uxy.^2 .+ vxy.^2)
+    # xz plane @ y=0
+        uxz = zeros(resolution, resolution)
+        wxz = zeros(resolution, resolution)
+        for i in 1:resolution
+            for j in 1:resolution
+                uxz[i, j], _, wxz[i, j] = WindField([x_vals[i], 0.0, z_vals[j]])
+            end
+        end
+        xzmag = sqrt.(uxz.^2 .+ wxz.^2)
+    # yz plane @ x=0
+        vyz = zeros(resolution, resolution)
+        wyz = zeros(resolution, resolution)
+        for i in 1:resolution
+            for j in 1:resolution
+                _, vyz[i, j], wyz[i, j] = WindField([0.0, y_vals[i], z_vals[j]])
+            end
+        end
+        yzmag = sqrt.(vyz.^2 .+ wyz.^2)    
     # Create the figure
         fig = figure(figsize=(12, 9))
         ax = fig.add_subplot(111, projection="3d")
-        ax[:set_axis_off]()
-        # Labels and title
         ax.grid("False")
+    # Labels and title
         plt.grid("None")
         ax.set_xlabel("Easting")
         ax.set_ylabel("Northing")
@@ -285,73 +280,137 @@ function plotFancy(domain_x, domain_y, domain_z, history, height=50, resolution=
         ax.set_ylim(domain_y[1:2])
         ax.set_zlim(domain_z[1:2])
         ax.set_title("Downburst Wind Field")
-    # Plot balloon path
-        ax.plot(balloon_x, balloon_y, balloon_z, label="3D Trajectory", color="green")
-
-    # Plot yz plane @ x=-1000
-        y_plane, z_plane = repeat(y_vals, 1, resolution), repeat(z_vals', resolution, 1)
-        x_plane = -999 * ones(size(y_plane))
-        ax.plot_surface(
-            x_plane, y_plane, z_plane,
-            rstride=1, cstride=1, facecolors=PyPlot.cm.viridis(yzmag./maximum(xzmag)),
-            shade="True", alpha=0.4
-        )
-    # Plot xz plane @ y=-1000
-        x_plane, z_plane = repeat(x_vals, 1, resolution), repeat(z_vals', resolution, 1)
-        y_plane = 999.0 * ones(size(x_plane))
-        ax.plot_surface(
-            x_plane, y_plane, z_plane,
-            rstride=1, cstride=1, facecolors=PyPlot.cm.viridis(xzmag./maximum(xzmag)),
-            shade="True", alpha=0.4
-        )
-    # Plot xy plane @ z=1
-        x_plane, y_plane = repeat(x_vals, 1, resolution), repeat(y_vals', resolution, 1)
-        z_plane = zeros(size(x_plane))
-        ax.plot_surface(
-            x_plane, y_plane, z_plane,
-            rstride=1, cstride=1, facecolors=PyPlot.cm.viridis(xymag./maximum(xymag)),
-            shade="True", alpha=0.4
-        )
-
-    # Quiver for xy plane
+    # Contours   
+        # Plot xy plane contour
+                X, Y = np.meshgrid(x_vals, y_vals)  # Grid for xy plane
+                ax.contourf(
+                    X, Y, xymag,
+                    zdir="z",    # Projection direction
+                    offset=domain_z[1],  # Bottom of z-axis
+                    cmap="viridis",
+                    alpha=0.6,
+                    zorder=1
+                )
+        # Plot xz plane contour plot
+                X, Z = np.meshgrid(x_vals, z_vals)  # Grid for xz plane
+                ax.contourf(
+                    X, xzmag', Z,
+                    zdir="y",  
+                    cmap="viridis",
+                    alpha=0.6,
+                    zorder=1,
+                    offset=domain_y[2]  # Place on y=center_y
+                )
+        # Plot yz plane contour
+                Y, Z = np.meshgrid(y_vals, z_vals)  # Grid for xz plane
+                ax.contourf(
+                    yzmag', Y, Z,
+                    zdir="x",  
+                    cmap="viridis",
+                    alpha=0.6,
+                    zorder=1,
+                    offset=domain_x[1]  # Place on x=center_x
+                ) 
+    # Quivers
+        # --- Quiver for xy plane ---
+        # Downscale quiver
         x_quiver = x_vals[1:downscale:end]
         y_quiver = y_vals[1:downscale:end]
         uxy_downscaled = uxy[1:downscale:end, 1:downscale:end]
         vxy_downscaled = vxy[1:downscale:end, 1:downscale:end]
+
+        # Crop the edges by excluding the outermost vectors
+        x_quiver = x_quiver[2:end-1]  # Remove outermost x values
+        y_quiver = y_quiver[2:end-1]  # Remove outermost y values
+        uxy_downscaled = uxy_downscaled[2:end-1, 2:end-1]  # Remove outermost vectors
+        vxy_downscaled = vxy_downscaled[2:end-1, 2:end-1]  # Remove outermost vectors
+
+        # Create grid for xy plane quiver
         x_quiver_plane, y_quiver_plane = repeat(x_quiver, 1, length(y_quiver)), repeat(y_quiver', length(x_quiver), 1)
-        z_quiver_plane = 2*ones(size(x_quiver_plane))
+        z_quiver_plane = 2 * ones(size(x_quiver_plane))
+
         ax.quiver(
             x_quiver_plane, y_quiver_plane, z_quiver_plane,
             uxy_downscaled, vxy_downscaled, zeros(size(uxy_downscaled)),
-            color="black", length=arrow_scale, normalize="False"
+            color="black", length=arrow_scale, normalize="False", zorder=10
         )
-    # Quiver for xz plane
+
+        # --- Quiver for xz plane ---
+        # Downscale quiver for xz plane
         x_quiver = x_vals[1:downscale:end]
         z_quiver = z_vals[1:downscale:end]
         uxz_downscaled = uxz[1:downscale:end, 1:downscale:end]
         wxz_downscaled = wxz[1:downscale:end, 1:downscale:end]
+
+        # Crop the edges
+        x_quiver = x_quiver[2:end-1]
+        z_quiver = z_quiver[2:end-1]
+        uxz_downscaled = uxz_downscaled[2:end-1, 2:end-1]
+        wxz_downscaled = wxz_downscaled[2:end-1, 2:end-1]
+
+        # Create grid for xz plane quiver
         x_quiver_plane, z_quiver_plane = repeat(x_quiver, 1, length(z_quiver)), repeat(z_quiver', length(x_quiver), 1)
         y_quiver_plane = 997.0 * ones(size(x_quiver_plane))
+
         ax.quiver(
             x_quiver_plane, y_quiver_plane, z_quiver_plane,
             uxz_downscaled, zeros(size(uxz_downscaled)), wxz_downscaled,
-            color="black", length=arrow_scale, normalize="False"
+            color="black", length=arrow_scale, normalize="False", zorder=10
         )
-    # Quiver for yz plane
 
+        # --- Quiver for yz plane ---
+        # Downscale quiver for yz plane
         y_quiver = y_vals[1:downscale:end]
         z_quiver = z_vals[1:downscale:end]
         vyz_downscaled = vyz[1:downscale:end, 1:downscale:end]
         wyz_downscaled = wyz[1:downscale:end, 1:downscale:end]
+
+        # Crop the edges
+        y_quiver = y_quiver[2:end-1]
+        z_quiver = z_quiver[2:end-1]
+        vyz_downscaled = vyz_downscaled[2:end-1, 2:end-1]
+        wyz_downscaled = wyz_downscaled[2:end-1, 2:end-1]
+
+        # Create grid for yz plane quiver
         y_quiver_plane, z_quiver_plane = repeat(y_quiver, 1, length(z_quiver)), repeat(z_quiver', length(y_quiver), 1)
         x_quiver_plane = -997 * ones(size(y_quiver_plane))
+
         ax.quiver(
             x_quiver_plane, y_quiver_plane, z_quiver_plane,
             zeros(size(vyz_downscaled)), vyz_downscaled, wyz_downscaled,
-            color="black", length=arrow_scale, normalize="False"
+            color="black", length=arrow_scale, normalize="False", zorder=10
         )
-    PyPlot.grid("False")
-    show()
+    # Plot balloon path from history
+        balloon_x = history[1, :]  # Easting
+        balloon_y = history[2, :]  # Northing
+        balloon_z = history[3, :]  # Altitude
+        ax.plot(
+            balloon_x, balloon_y, balloon_z, 
+            label="3D Trajectory", 
+            color="Black", 
+            linewidth=5, 
+            zorder=8  
+        )
+        ax.scatter(
+            balloon_x[1], balloon_y[1], balloon_z[1],
+            s=[75],
+            alpha=1.0,
+            label="Release",
+            color="green",
+            zorder=10
+        )
+        ax.scatter(
+            balloon_x[end], balloon_y[end], balloon_z[end],
+            s=[75],
+            alpha=1.0,
+            label="Final",
+            color="Red",
+            zorder=10
+        )
+        legend()
+        plt.savefig("./figures/3dplot.png", dpi=300)
+        plt.show()
+
     return nothing
 end
 

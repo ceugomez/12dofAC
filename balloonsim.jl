@@ -135,7 +135,7 @@ begin
     history = zeros(Float64, 6, noIdx)
 
     # Set initial state 
-    history[:, 1] = [400, -100.0, 70.0, 0.0, 0.0, 0.0]  # [x, y, z, vx, vy, vz]
+    history[:, 1] = [10.0, 25.0, 70.0, 0.0, 0.0, 0.0]  # [x, y, z, vx, vy, vz]
 
     # Simulation loop
     for i in 1:(noIdx - 1)
@@ -159,9 +159,10 @@ begin
     height_z = 40.0;
 
     # Plot the wind direction
-    plotFancy(domain_x,domain_y,domain_z,history,50.0,resolution,50.0)
-    plot_wind_direction_VF(domain_x, domain_z, resolution, 0.2)
-    plot_wind_top_down(domain_x, domain_y, height_z, resolution, 0.4)
+    #plotFancy(domain_x,domain_y,domain_z,history,50.0,resolution,50.0)
+    PleasePleasePlease(domain_x,domain_y,domain_z,history,50.0,resolution,50.0)
+    #plot_wind_direction_VF(domain_x, domain_z, resolution, 0.2)
+    #plot_wind_top_down(domain_x, domain_y, height_z, resolution, 0.2)
     #plot_wind_top_down_with_path(domain_x, domain_y, history, height_z, resolution, 0.075)
     #visualize_field_t(history[1:3, :],tstep,tf)  
     #visualize_field_xyz(history[1:3, :])
