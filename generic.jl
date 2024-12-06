@@ -79,7 +79,7 @@ function GenericWindField(pos)
     return [W_E; W_N; W_U]
 end
 # EU quiver wind plotfunction plot_wind_direction_VF(domain_x, domain_z, resolution=50, arrow_scale=0.2)
-function plot_wind_direction_VF(domain_x, domain_z, resolution=50, arrow_scale=0.2)
+function plot_wind_direction_VF(domain_x, domain_z, history, resolution=50, arrow_scale=0.2)
 
     # Generate x and z vectors
     x_vals = LinRange(domain_x[1], domain_x[2], resolution)
@@ -91,17 +91,18 @@ function plot_wind_direction_VF(domain_x, domain_z, resolution=50, arrow_scale=0
 
     # Initialize wind field components
     u = zeros(resolution, resolution)
+    v = zeros(resolution, resolution)
     w = zeros(resolution, resolution)
 
     # Compute wind field values at each grid point
     for i in 1:resolution
         for j in 1:resolution
-            u[i, j], _, w[i, j] = WindField([x_coords[i, j], 0.0, z_coords[i, j]])
+            u[i, j], v[i,j], w[i, j] = WindField([x_coords[i, j], 0.0, z_coords[i, j]])
         end
     end
 
     # Calculate magnitude of the wind field
-    mag = sqrt.(u .^ 2 + w .^ 2)
+    mag = sqrt.(u .^ 2 + v .^ 2 + w .^ 2)
 
     # Normalize vectors for quiver plot and scale them
     u_scaled = arrow_scale .* (u ./ (mag .+ eps()))
@@ -125,6 +126,33 @@ function plot_wind_direction_VF(domain_x, domain_z, resolution=50, arrow_scale=0
     ax.set_title("Wind Field (Vertical Slice at N=0)")
     ax.set_xlabel("East [m]")
     ax.set_ylabel("Up [m]")
+    balloon_x = history[1, :]  # Easting
+    balloon_y = history[2, :]  # Northing
+    balloon_z = history[3, :]  # Altitude
+    ax.plot(
+            balloon_x, balloon_z, 
+            label="Trajectory", 
+            color="Black", 
+            linewidth=1, 
+            zorder=8  
+        )
+        ax.scatter(
+            balloon_x[1], balloon_z[1],
+            s=[75],
+            alpha=1.0,
+            label="Release",
+            color="green",
+            zorder=10
+        )
+        ax.scatter(
+            balloon_x[end],balloon_z[end],
+            s=[75],
+            alpha=1.0,
+            label="Final",
+            color="Red",
+            zorder=10
+        )
+        legend()
 
     # Save the plot
     fig.savefig("./figures/WindVF_EU.png")
@@ -179,6 +207,7 @@ end
 
 function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float64}, height=50.0, resolution=50, arrow_scale=0.2)
     # Generate x and y vectors
+    downscale = 20
     x_vals = LinRange(domain_x[1], domain_x[2], resolution)
     y_vals = LinRange(domain_y[1], domain_y[2], resolution)
     # Meshgrid
@@ -188,14 +217,15 @@ function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float6
     # Compute wind field at specified height
     u = zeros(resolution, resolution)
     v = zeros(resolution, resolution)
+    w = zeros(resolution, resolution)
     for i in 1:resolution
         for j in 1:resolution
-            u[i, j], v[i, j], _ = WindField([x_coords[i, j], y_coords[i, j], height])
+            u[i, j], v[i, j], w[i,j] = WindField([x_coords[i, j], y_coords[i, j], height])
         end
     end
 
     # Calculate wind magnitude
-    mag = sqrt.(u .^ 2 + v .^ 2)
+    mag = sqrt.(u .^ 2 + v .^ 2 + w .^ 2)
 
     # Normalize the vectors and scale them for the quiver plot
     u_scaled = arrow_scale .*u 
@@ -205,7 +235,8 @@ function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float6
     balloon_y = history[2, :]  # Northing
 
     # Create the plot
-    fig, ax = subplots()
+    fig = figure(figsize=(12, 9))
+    ax = fig.add_subplot(111)
     im = ax.imshow(
         mag',
         extent=(domain_x[1], domain_x[2], domain_y[1], domain_y[2]),
@@ -222,8 +253,18 @@ function plot_wind_top_down_with_path(domain_x, domain_y, history::Matrix{Float6
     ax.set_title("Wind Field (Vertical Slice at $height m)")
     ax.set_xlabel("East [m]")
     ax.set_ylabel("North [m]")
-    ax.plot(balloon_x,balloon_y, w=3, color="red")
-    ax.legend("Balloon Path")
+    ax.plot(balloon_x,balloon_y, color="black", label="Trajectory")
+    ax.set_xlim(domain_x[1:2])
+    ax.set_ylim(domain_y[1:2])
+    ax.scatter(
+            balloon_x[1], balloon_y[1],
+            s=[75],
+            alpha=1.0,
+            label="Release",
+            color="green",
+            zorder=10
+        )
+    legend()
 
     # Save the plot
     fig.savefig("./figures/WindVF_EN.png")
