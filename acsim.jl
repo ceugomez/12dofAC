@@ -87,10 +87,6 @@ function ACstatederiv(state::AcState, control, param::Parameters)
     wind = windField(inertial_position_earth)
     rotBodyInertial = Rbe(eang)
     rotInertialBody = transpose(rotBodyInertial);
-    # do the easy ones first
-        # 
-
-    
 
     Fa = ACforces(state,control,param)
     
